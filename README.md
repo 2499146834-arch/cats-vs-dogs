@@ -83,3 +83,7 @@ Input (160x160x3)
   → Dense(1, sigmoid) (1,281 trainable params)
   → Output: P(dog)
 ```
+
+## Related Repositories
+
+- [Foundation-of-AI](https://github.com/2499146834-arch/Foundation-of-AI) — Original baseline experiment (3-layer CNN from scratch, 89% accuracy)
