@@ -1,51 +1,29 @@
 # Cats vs Dogs — Transfer Learning Classifier
 
-Binary image classification (cat vs dog) using **MobileNetV2 transfer learning** with 98.98% validation accuracy.
+[![Accuracy](https://img.shields.io/badge/Validation%20Accuracy-98.98%25-brightgreen)](https://github.com/2499146834-arch/cats-vs-dogs)
+[![Framework](https://img.shields.io/badge/Framework-TensorFlow%2FKeras-orange)](https://www.tensorflow.org/)
+[![Model](https://img.shields.io/badge/Backbone-MobileNetV2-blue)](https://arxiv.org/abs/1801.04381)
+[![Demo](https://img.shields.io/badge/Demo-TF.js%20%2B%20Flask-lightgrey)]()
 
-## Results
+Binary image classification (cat vs dog) using **MobileNetV2 transfer learning** — the improved follow-up to a [baseline 3-layer CNN experiment](https://github.com/2499146834-arch/Foundation-of-AI). Achieves near-human performance with an order of magnitude fewer parameters.
 
-| Metric | Original (3-layer CNN) | Improved (MobileNetV2) |
-|--------|----------------------|------------------------|
-| Validation Accuracy | 89.00% | **98.98%** |
-| Parameters | ~19,030,000 | **2,259,265** |
-| Cat F1-Score | 0.89 | 0.9898 |
-| Dog F1-Score | 0.89 | 0.9899 |
-| Misclassified | ~550 / 5,000 | 203 / 19,999 |
+**Validation Accuracy: 98.98%** | **Parameters: 2.3M** | **Dataset: ~20,000 images** | **Input: 160×160**
 
-### Key Improvements
-- **Transfer Learning**: MobileNetV2 pretrained on ImageNet replaces from-scratch 3-layer CNN
-- **GlobalAveragePooling2D**: Replaces Flatten, reducing parameters by 88%
-- **Dropout(0.5)** + Color Augmentation (brightness/contrast)
-- **Two-phase Training**: Freeze backbone → train head → fine-tune top layers
-- **ReduceLROnPlateau** + EarlyStopping for adaptive training
-
-## Project Structure
-
-```
-├── train.py                              # End-to-end training pipeline
-├── app.py                                # Flask API server
-├── index.html                            # Static web demo (double-click to run)
-├── head_weights.json                     # Classifier head weights (for browser inference)
-├── 启动.vbs                               # One-click launcher for Flask version
-├── output/
-│   ├── model.keras                       # Trained Keras model (~24.5 MB)
-│   ├── training_curves.png               # Accuracy & loss curves
-│   ├── confusion_matrix.png              # Validation confusion matrix
-│   └── classification_report.txt         # Precision / recall / F1 report
-├── Experiment_Report_Comparison_EN.docx   # English comparison report
-└── 实验改进报告_对比.docx                  # Chinese comparison report
-```
+---
 
 ## Quick Start
 
-### Option 1: Static HTML (Recommended)
+Three ways to use the model — no Python required for the first two.
+
+### 1. Browser Demo (easiest)
 
 ```
 Double-click index.html → wait for model to load (~10 MB, cached after first visit) → drag & drop an image
 ```
-First launch requires internet to download MobileNetV2 backbone from TF Hub. Subsequent visits load from browser cache instantly.
 
-### Option 2: Flask Server (Offline)
+First launch downloads MobileNetV2 from TF Hub. Subsequent visits load from browser cache instantly.
+
+### 2. Flask Server
 
 ```
 Double-click 启动.vbs → opens http://127.0.0.1:5001
@@ -57,33 +35,109 @@ pip install tensorflow flask pillow
 python app.py
 ```
 
-### Retrain the Model
+### 3. Retrain from Scratch
 
 ```bash
+git clone https://github.com/2499146834-arch/cats-vs-dogs.git
+cd cats-vs-dogs
 pip install tensorflow matplotlib scikit-learn pillow
 python train.py
 ```
-The script automatically downloads the dataset (~800 MB), preprocesses images, trains with two-phase transfer learning, and saves all outputs to `output/`.
 
-## Dependencies
+The script handles everything end-to-end: dataset download (~800 MB), image cleaning, two-phase training, evaluation, and output generation. All results land in `output/`.
 
-| Component | Packages |
-|-----------|----------|
-| Training | `tensorflow>=2.17`, `numpy`, `matplotlib`, `scikit-learn`, `pillow` |
-| Flask server | `tensorflow`, `flask`, `pillow` |
-| Static HTML | None — runs entirely in browser via TF.js CDN |
+---
+
+## Results
+
+| Metric | Baseline (3-layer CNN) | Improved (MobileNetV2) |
+|--------|----------------------|------------------------|
+| Validation Accuracy | 89.00% | **98.98%** |
+| Parameters | ~19,030,000 | **2,259,265** |
+| Cat F1-Score | 0.89 | **0.9898** |
+| Dog F1-Score | 0.89 | **0.9899** |
+| Misclassified | ~550 / 5,000 | **203 / 19,999** |
+
+The model generalizes equally well across both classes — Cat F1 (0.9898) and Dog F1 (0.9899) are virtually identical, confirming no class bias.
+
+---
+
+## Key Improvements over Baseline
+
+| Improvement | Baseline | This Project | Impact |
+|------------|----------|-------------|--------|
+| **Backbone** | 3-layer CNN from scratch | MobileNetV2 (ImageNet pretrained) | +10% accuracy |
+| **Pooling** | Flatten → 19M params | GlobalAveragePooling2D → 2.3M params | 88% fewer parameters |
+| **Regularization** | None | Dropout(0.5) | Reduces overfitting |
+| **Augmentation** | Spatial only | Spatial + color (brightness, contrast, saturation) | Better generalization |
+| **Training Strategy** | Single-phase | Two-phase: freeze → fine-tune | Stable convergence |
+| **LR Schedule** | Fixed | ReduceLROnPlateau + EarlyStopping | Adaptive training |
+
+---
 
 ## Model Architecture
 
 ```
-Input (160x160x3)
-  → MobileNetV2 backbone (pretrained, 2,257,984 params)
-  → GlobalAveragePooling2D
-  → Dropout(0.5)
-  → Dense(1, sigmoid) (1,281 trainable params)
-  → Output: P(dog)
+Input (160×160×3)
+  ↓  MobileNetV2 backbone (pretrained, frozen layers 1–100, 2,257,984 params)
+  ↓  GlobalAveragePooling2D
+  ↓  Dropout(0.5)
+  ↓  Dense(1, sigmoid) — 1,281 trainable params
+  ↓  Output: P(dog)
 ```
+
+### Two-Phase Training
+
+| Phase | Epochs | LR | Backbone | Purpose |
+|-------|--------|-----|----------|---------|
+| **1 — Head training** | ≤15 | 1e-3 | Frozen | Train classifier from scratch |
+| **2 — Fine-tuning** | ≤15 | 1e-5 | Layers 100+ unfrozen | Adapt top-level features to dogs vs cats |
+
+EarlyStopping (patience=6) + ReduceLROnPlateau (factor=0.5, patience=3) in both phases — training stops automatically when convergence is reached.
+
+---
+
+## Project Structure
+
+```
+├── train.py                              # End-to-end training pipeline
+├── app.py                                # Flask API server (REST endpoint)
+├── index.html                            # Browser demo (TF.js, no server needed)
+├── head_weights.json                     # Classifier head weights (for TF.js inference)
+├── 启动.vbs                               # One-click Flask launcher
+│
+├── output/
+│   ├── model.keras                       # Trained Keras model (~24.5 MB)
+│   ├── training_curves.png               # Accuracy & loss curves
+│   ├── confusion_matrix.png              # Validation confusion matrix
+│   └── classification_report.txt         # Precision / recall / F1 report
+│
+├── dataset/                              # Auto-generated by train.py
+│   ├── train/cat/  train/dog/
+│   └── val/cat/    val/dog/
+│
+├── Experiment_Report_Comparison_EN.docx   # English comparison report
+└── 实验改进报告_对比.docx                  # Chinese comparison report
+```
+
+---
+
+## Dependencies
+
+| Component | Packages | Notes |
+|-----------|----------|-------|
+| **Training** | `tensorflow>=2.17`, `numpy`, `matplotlib`, `scikit-learn`, `pillow` | GPU recommended |
+| **Flask server** | `tensorflow`, `flask`, `pillow` | CPU sufficient |
+| **Browser demo** | None | Runs entirely in browser via TF.js CDN |
+
+---
 
 ## Related Repositories
 
-- [Foundation-of-AI](https://github.com/2499146834-arch/Foundation-of-AI) — Original baseline experiment (3-layer CNN from scratch, 89% accuracy)
+- [Foundation-of-AI](https://github.com/2499146834-arch/Foundation-of-AI) — Original baseline experiment (3-layer CNN from scratch, 89% accuracy, optimization ablation study)
+
+---
+
+## License
+
+This project is coursework for the **Foundation of AI (CDS 521)** course. All rights reserved.
